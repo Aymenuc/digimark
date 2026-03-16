@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>WPM v3 — Mission Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#06060e;--card:#0c0c1a;--border:rgba(255,255,255,0.035);--g:#00e5a0;--g2:#00c48c;--b:#6366f1;--o:#ff6b35;--r:#ff3b5c;--y:#ffc107;--c:#00d4ff;--t:#e0e7ef;--m:#8892a4;--d:#4a5568}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{min-height:100vh;background:var(--bg);font-family:'Sora',sans-serif;color:var(--t);overflow-x:hidden}
+::selection{background:var(--g);color:#000}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#1a1a2e;border-radius:3px}
+
+/* Layout */
+.shell{max-width:920px;margin:0 auto;padding:0 14px}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,229,160,0.15),transparent)}
+.card-glow{box-shadow:0 0 60px rgba(0,229,160,0.04)}
+
+/* Typography */
+.mono{font-family:'Space Mono',monospace}
+.label{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--d)}
+.val{font-weight:800}
+
+/* Buttons */
+.btn{border:none;cursor:pointer;font-family:'Sora',sans-serif;font-weight:600;border-radius:10px;transition:all .2s;font-size:13px}
+.btn:active{transform:scale(0.96)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-g{background:var(--g);color:#000;padding:12px 24px}
+.btn-g:hover{background:#00ffa8;box-shadow:0 0 20px rgba(0,229,160,0.3)}
+.btn-ghost{background:rgba(255,255,255,0.03);color:var(--m);padding:10px 18px;border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(255,255,255,0.06);color:var(--t)}
+.btn-sm{padding:7px 14px;font-size:12px}
+.btn-danger{background:rgba(255,59,92,0.1);color:var(--r);padding:10px 18px}
+
+/* Status indicators */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot-g{background:var(--g);box-shadow:0 0 8px var(--g)}
+.dot-y{background:var(--y);box-shadow:0 0 8px var(--y)}
+.dot-r{background:var(--r);box-shadow:0 0 8px var(--r)}
+.dot-pulse{animation:pulse 2s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Stat cards */
+.stat{text-align:center;padding:16px 12px}
+.stat-val{font-size:28px;font-weight:800;line-height:1}
+.stat-label{font-size:11px;color:var(--d);margin-top:6px;letter-spacing:0.5px}
+
+/* Tags */
+.tag{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600}
+.tag-g{background:rgba(0,229,160,0.1);color:var(--g)}
+.tag-b{background:rgba(99,102,241,0.1);color:var(--b)}
+.tag-o{background:rgba(255,107,53,0.1);color:var(--o)}
+.tag-r{background:rgba(255,59,92,0.1);color:var(--r)}
+.tag-c{background:rgba(0,212,255,0.1);color:var(--c)}
+
+/* Log entries */
+.log-entry{padding:12px 14px;border-bottom:1px solid var(--border);transition:background .15s}
+.log-entry:hover{background:rgba(255,255,255,0.015)}
+.log-entry:last-child{border-bottom:none}
+
+/* Input */
+input[type=text]{background:#080812;border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--t);font-family:inherit;font-size:14px;width:100%;transition:border .2s}
+input:focus{outline:none;border-color:rgba(0,229,160,0.4)}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:8px}
+.tab{padding:9px 16px;border-radius:10px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;transition:all .15s;color:var(--d);background:transparent;white-space:nowrap}
+.tab:hover{color:var(--m);background:rgba(255,255,255,0.02)}
+.tab.on{color:var(--g);background:rgba(0,229,160,0.08)}
+
+/* Animations */
+.fade{animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:16px;height:16px;border:2px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
+
+/* Prose */
+.prose{color:var(--m);font-size:13px;line-height:1.65}
+.prose strong{color:var(--t)}
+
+/* Hide/show */
+.hidden{display:none!important}
+
+/* Progress bar */
+.prog-track{height:4px;background:rgba(255,255,255,0.04);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;transition:width .8s ease}
+
+/* Timeline */
+.tl-item{display:flex;gap:12px;padding:10px 0}
+.tl-dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.tl-line{position:relative}
+.tl-line::before{content:'';position:absolute;left:4px;top:15px;bottom:-10px;width:2px;background:var(--border)}
+.tl-item:last-child .tl-line::before{display:none}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div style="padding:28px 14px 12px;text-align:center;position:relative">
+  <div style="position:absolute;top:-150px;left:50%;transform:translateX(-50%);width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(0,229,160,0.03) 0%,transparent 55%);pointer-events:none"></div>
+  <div class="mono" style="font-size:10px;letter-spacing:4px;color:var(--g);margin-bottom:6px">WELLNESS PROFIT MACHINE v3</div>
+  <h1 style="font-size:clamp(24px,5vw,38px);font-weight:800;background:linear-gradient(135deg,#fff 20%,var(--g) 60%,var(--c) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1">Mission Control</h1>
+  <p style="color:var(--d);font-size:13px;margin-top:6px">Real-time dashboard for your autonomous affiliate business</p>
+</div>
+
+<!-- ═══ CONNECTION BAR ═══ -->
+<div class="shell" style="margin-bottom:12px">
+  <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px">
+    <span id="conn-dot" class="dot dot-y dot-pulse"></span>
+    <input type="text" id="api-url" placeholder="Paste your Cloud Function base URL (e.g. https://us-central1-myproject.cloudfunctions.net)" style="flex:1;min-width:200px;font-size:12px;padding:8px 12px">
+    <button class="btn btn-g btn-sm" onclick="connect()">Connect</button>
+    <span id="conn-status" class="mono" style="font-size:11px;color:var(--d)">Not connected</span>
+  </div>
+</div>
+
+<!-- ═══ TABS ═══ -->
+<div class="shell">
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-t="overview">Overview</button>
+    <button class="tab" data-t="pipeline">Run Pipeline</button>
+    <button class="tab" data-t="content">Content Log</button>
+    <button class="tab" data-t="revenue">Revenue</button>
+    <button class="tab" data-t="analytics">Analytics</button>
+    <button class="tab" data-t="config">Config</button>
+  </div>
+</div>
+
+<!-- ═══ PAGES ═══ -->
+<div class="shell" style="padding-bottom:60px">
+
+<!-- OVERVIEW -->
+<div id="p-overview" class="page fade">
+  <!-- Stats row -->
+  <div class="grid g3" style="margin-top:10px" id="stats-grid">
+    <div class="card stat"><div class="stat-val" style="color:var(--g)" id="s-content">—</div><div class="stat-label">Content Pieces</div></div>
+    <div class="card stat"><div class="stat-val" style="color:var(--b)" id="s-topics">—</div><div class="stat-label">Topics Covered</div></div>
+    <div class="card stat"><div class="stat-val" style="color:var(--o)" id="s-rev">—</div><div class="stat-label">Est. Monthly Rev</div></div>
+  </div>
+
+  <!-- System health -->
+  <div class="card" style="margin-top:12px">
+    <div class="label" style="margin-bottom:12px">System Health</div>
+    <div id="health-grid" class="grid g2" style="gap:8px"></div>
+  </div>
+
+  <!-- Recent activity -->
+  <div class="card" style="margin-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="label">Recent Activity</div>
+      <button class="btn btn-ghost btn-sm" onclick="refreshStatus()">↻ Refresh</button>
+    </div>
+    <div id="recent-log" style="max-height:350px;overflow-y:auto">
+      <div style="text-align:center;color:var(--d);padding:30px;font-size:13px">Connect to your Cloud Function URL to see live data</div>
+    </div>
+  </div>
+</div>
+
+<!-- RUN PIPELINE -->
+<div id="p-pipeline" class="page hidden fade">
+  <div class="card card-glow" style="text-align:center;padding:30px 20px">
+    <div style="font-size:48px;margin-bottom:12px">⚡</div>
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:6px">Run Content Pipeline</h2>
+    <p class="prose" style="max-width:400px;margin:0 auto 20px">This triggers the full v3 pipeline: trend detection → content generation → publish everywhere → track + learn. Usually takes 2-4 minutes.</p>
+    <button class="btn btn-g" id="run-btn" onclick="runPipeline()" style="font-size:16px;padding:16px 40px">
+      Launch Pipeline 🚀
+    </button>
+    <div id="run-status" style="margin-top:16px;font-size:13px;color:var(--d)"></div>
+  </div>
+
+  <!-- Pipeline result -->
+  <div id="pipeline-result" class="hidden" style="margin-top:14px">
+    <div class="card">
+      <div class="label" style="color:var(--g);margin-bottom:14px">Pipeline Result</div>
+      <div id="pipeline-data"></div>
+    </div>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card" style="text-align:center">
+      <div style="font-size:24px;margin-bottom:8px">🔍</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">SEO Optimizer</div>
+      <p class="prose" style="font-size:12px;margin-bottom:12px">Rewrite underperforming blog posts</p>
+      <button class="btn btn-ghost btn-sm" onclick="runEndpoint('monthly_optimize','seo-status')">Run Now</button>
+      <div id="seo-status" style="margin-top:8px;font-size:11px;color:var(--d)"></div>
+    </div>
+    <div class="card" style="text-align:center">
+      <div style="font-size:24px;margin-bottom:8px">📊</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">Analytics Scan</div>
+      <p class="prose" style="font-size:12px;margin-bottom:12px">Trends + gaps + performance analysis</p>
+      <button class="btn btn-ghost btn-sm" onclick="runEndpoint('analytics','analytics-status')">Run Now</button>
+      <div id="analytics-status" style="margin-top:8px;font-size:11px;color:var(--d)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT LOG -->
+<div id="p-content" class="page hidden fade">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="label">Content Library</div>
+      <button class="btn btn-ghost btn-sm" onclick="refreshStatus()">↻ Refresh</button>
+    </div>
+    <div id="content-list" style="max-height:500px;overflow-y:auto">
+      <div style="text-align:center;color:var(--d);padding:30px;font-size:13px">Connect to see your content history</div>
+    </div>
+  </div>
+</div>
+
+<!-- REVENUE -->
+<div id="p-revenue" class="page hidden fade">
+  <div class="grid g3" style="margin-top:4px">
+    <div class="card stat"><div class="stat-val" style="color:var(--g)" id="r-monthly">—</div><div class="stat-label">Est. Monthly</div></div>
+    <div class="card stat"><div class="stat-val" style="color:var(--c)" id="r-yearly">—</div><div class="stat-label">Est. Yearly</div></div>
+    <div class="card stat"><div class="stat-val" style="color:var(--y)" id="r-epc">—</div><div class="stat-label">Avg EPC</div></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="label" style="margin-bottom:14px">Revenue Breakdown</div>
+    <div id="rev-breakdown"></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="label" style="margin-bottom:14px">Growth Projection</div>
+    <div id="growth-timeline">
+      <div class="tl-item"><div class="tl-line"><div class="tl-dot" style="background:var(--g)"></div></div><div><div style="font-weight:700;font-size:14px">Month 1-3</div><div class="prose">2-5K visitors · $100-500/mo · Foundation building phase</div></div></div>
+      <div class="tl-item"><div class="tl-line"><div class="tl-dot" style="background:var(--c)"></div></div><div><div style="font-weight:700;font-size:14px">Month 4-6</div><div class="prose">5-15K visitors · $500-2,000/mo · SEO gaining traction</div></div></div>
+      <div class="tl-item"><div class="tl-line"><div class="tl-dot" style="background:var(--b)"></div></div><div><div style="font-weight:700;font-size:14px">Month 7-12</div><div class="prose">15-40K visitors · $2,000-8,000/mo · Content snowball effect</div></div></div>
+      <div class="tl-item"><div class="tl-line"><div class="tl-dot" style="background:var(--o)"></div></div><div><div style="font-weight:700;font-size:14px">Year 2</div><div class="prose">40-100K+ visitors · $8,000-30,000/mo · Full passive income</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ANALYTICS -->
+<div id="p-analytics" class="page hidden fade">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="label">AI Analytics Report</div>
+      <button class="btn btn-ghost btn-sm" id="fetch-analytics-btn" onclick="fetchAnalytics()">Generate Report</button>
+    </div>
+    <div id="analytics-content">
+      <p class="prose" style="text-align:center;padding:20px">Click "Generate Report" to run trend detection, competitor gap analysis, and performance review.</p>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIG -->
+<div id="p-config" class="page hidden fade">
+  <div class="card">
+    <div class="label" style="margin-bottom:14px">Connection Settings</div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--m);display:block;margin-bottom:4px">Cloud Function Base URL</label>
+      <input type="text" id="cfg-url" placeholder="https://us-central1-your-project.cloudfunctions.net">
+    </div>
+    <button class="btn btn-g btn-sm" onclick="saveConfig()">Save & Connect</button>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="label" style="margin-bottom:14px">Deployment Checklist</div>
+    <div id="checklist"></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="label" style="margin-bottom:10px;color:var(--c)">Quick Commands</div>
+    <div class="mono" style="background:#080812;border-radius:10px;padding:14px;font-size:12px;line-height:2;color:var(--g);overflow-x:auto">
+      # Check status<br>
+      curl YOUR_URL/status<br><br>
+      # Run pipeline now<br>
+      curl -X POST YOUR_URL/daily_pipeline<br><br>
+      # Run SEO optimizer<br>
+      curl -X POST YOUR_URL/monthly_optimize<br><br>
+      # View analytics<br>
+      curl YOUR_URL/analytics<br><br>
+      # View Cloud Function logs<br>
+      gcloud functions logs read daily_pipeline --limit=30
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════ */
+let BASE_URL = localStorage.getItem("wpm_url") || "";
+let statusData = null;
+
+/* ═══════════════════════════════════════
+   TAB SWITCHING
+   ═══════════════════════════════════════ */
+document.getElementById("tabs").addEventListener("click", e => {
+  const tab = e.target.closest(".tab");
+  if (!tab) return;
+  document.querySelectorAll(".page").forEach(p => p.classList.add("hidden"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("on"));
+  tab.classList.add("on");
+  const page = document.getElementById("p-" + tab.dataset.t);
+  if (page) { page.classList.remove("hidden"); page.classList.add("fade"); }
+});
+
+/* ═══════════════════════════════════════
+   CONNECTION
+   ═══════════════════════════════════════ */
+function connect() {
+  const url = document.getElementById("api-url").value.trim().replace(/\/+$/, "");
+  if (!url) return;
+  BASE_URL = url;
+  localStorage.setItem("wpm_url", url);
+  document.getElementById("conn-status").textContent = "Connecting...";
+  document.getElementById("conn-dot").className = "dot dot-y dot-pulse";
+  refreshStatus();
+}
+
+function saveConfig() {
+  const url = document.getElementById("cfg-url").value.trim().replace(/\/+$/, "");
+  if (url) {
+    document.getElementById("api-url").value = url;
+    connect();
+  }
+}
+
+// Load saved URL
+if (BASE_URL) {
+  document.getElementById("api-url").value = BASE_URL;
+  document.getElementById("cfg-url") && (document.getElementById("cfg-url").value = BASE_URL);
+  setTimeout(connect, 500);
+}
+
+/* ═══════════════════════════════════════
+   FETCH STATUS
+   ═══════════════════════════════════════ */
+async function refreshStatus() {
+  if (!BASE_URL) return;
+  try {
+    const r = await fetch(BASE_URL + "/status", { timeout: 15000 });
+    statusData = await r.json();
+    document.getElementById("conn-dot").className = "dot dot-g";
+    document.getElementById("conn-status").textContent = "Connected ✓";
+    renderOverview(statusData);
+    renderContent(statusData);
+    renderRevenue(statusData);
+    renderChecklist(statusData);
+  } catch (e) {
+    document.getElementById("conn-dot").className = "dot dot-r";
+    document.getElementById("conn-status").textContent = "Failed: " + e.message;
+  }
+}
+
+/* ═══════════════════════════════════════
+   RENDER: OVERVIEW
+   ═══════════════════════════════════════ */
+function renderOverview(data) {
+  document.getElementById("s-content").textContent = data.total_content || "0";
+  document.getElementById("s-topics").textContent = data.topics_covered || "0";
+  const rev = data.revenue?.est_monthly_revenue;
+  document.getElementById("s-rev").textContent = rev != null ? "$" + rev.toLocaleString() : "—";
+
+  // Health grid
+  const cfg = data.config || {};
+  const services = [
+    { name: "Gemini AI", key: "GEMINI_KEY", icon: "🧠" },
+    { name: "WordPress", key: "WP_URL", icon: "📝" },
+    { name: "Buffer", key: "BUFFER_TOKEN", icon: "📱" },
+    { name: "ConvertKit", key: "CONVERTKIT_KEY", icon: "✉️" },
+    { name: "Medium", key: "MEDIUM_TOKEN", icon: "📰" },
+    { name: "Notifications", key: "SENDGRID_KEY", icon: "🔔" },
+  ];
+  document.getElementById("health-grid").innerHTML = services.map(s => {
+    const ok = cfg[s.key] === "✓";
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+      <span class="dot ${ok ? "dot-g" : "dot-r"}"></span>
+      <span style="font-size:16px">${s.icon}</span>
+      <span style="font-size:13px;color:${ok ? "var(--t)" : "var(--d)"}">${s.name}</span>
+      <span class="tag ${ok ? "tag-g" : "tag-r"}" style="margin-left:auto">${ok ? "Active" : "Off"}</span>
+    </div>`;
+  }).join("");
+
+  // Recent log
+  const recent = data.recent || [];
+  if (recent.length === 0) {
+    document.getElementById("recent-log").innerHTML = '<div style="text-align:center;color:var(--d);padding:30px;font-size:13px">No content generated yet. Run the pipeline to start!</div>';
+    return;
+  }
+  document.getElementById("recent-log").innerHTML = recent.map(l => {
+    const icon = l.type === "pipeline" ? "⚡" : l.type === "seo_optimize" ? "🔍" : "📄";
+    const color = l.type === "pipeline" ? "var(--g)" : l.type === "seo_optimize" ? "var(--c)" : "var(--b)";
+    const time = l.ts ? new Date(l.ts).toLocaleString() : "";
+    return `<div class="log-entry">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">${icon}</span>
+          <span style="font-weight:600;font-size:14px;color:${color}">${l.topic || l.type || "—"}</span>
+        </div>
+        <span class="mono" style="font-size:10px;color:var(--d)">${time}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ═══════════════════════════════════════
+   RENDER: CONTENT LOG
+   ═══════════════════════════════════════ */
+function renderContent(data) {
+  const logs = data.recent || [];
+  if (!logs.length) {
+    document.getElementById("content-list").innerHTML = '<div style="text-align:center;color:var(--d);padding:30px;font-size:13px">No content yet</div>';
+    return;
+  }
+  document.getElementById("content-list").innerHTML = logs.map((l, i) => {
+    let d;
+    try { d = JSON.parse(l.data || "{}"); } catch { d = {}; }
+    const assets = d.assets || {};
+    const assetCount = d.assets_created || Object.keys(assets).length;
+    const source = d.topic_source || "";
+    const elapsed = d.elapsed_seconds || "";
+    return `<div class="log-entry" style="animation:fadeIn ${0.05*i}s ease both">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:14px">${l.topic || "—"}</div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+            ${source ? `<span class="tag tag-c">${source}</span>` : ""}
+            ${assetCount ? `<span class="tag tag-g">${assetCount} assets</span>` : ""}
+            ${elapsed ? `<span class="tag tag-b">${elapsed}s</span>` : ""}
+            ${assets.wordpress?.s === "ok" ? '<span class="tag tag-g">WP ✓</span>' : ""}
+            ${assets.medium?.s === "ok" ? '<span class="tag tag-b">Medium ✓</span>' : ""}
+          </div>
+        </div>
+        <span class="mono" style="font-size:10px;color:var(--d);white-space:nowrap">${l.date || ""}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ═══════════════════════════════════════
+   RENDER: REVENUE
+   ═══════════════════════════════════════ */
+function renderRevenue(data) {
+  const r = data.revenue || {};
+  document.getElementById("r-monthly").textContent = r.est_monthly_revenue != null ? "$" + r.est_monthly_revenue.toLocaleString() : "—";
+  document.getElementById("r-yearly").textContent = r.est_yearly_revenue != null ? "$" + r.est_yearly_revenue.toLocaleString() : "—";
+  document.getElementById("r-epc").textContent = r.avg_epc != null ? "$" + r.avg_epc : "—";
+
+  document.getElementById("rev-breakdown").innerHTML = `
+    <div class="grid g2" style="gap:10px">
+      <div style="padding:12px;background:rgba(0,229,160,0.04);border-radius:10px">
+        <div style="font-size:11px;color:var(--d)">Content (30d)</div>
+        <div style="font-size:22px;font-weight:800;color:var(--g)">${r.content_pieces_30d || 0}</div>
+      </div>
+      <div style="padding:12px;background:rgba(0,212,255,0.04);border-radius:10px">
+        <div style="font-size:11px;color:var(--d)">Est. Traffic</div>
+        <div style="font-size:22px;font-weight:800;color:var(--c)">${(r.est_monthly_traffic || 0).toLocaleString()}</div>
+      </div>
+      <div style="padding:12px;background:rgba(99,102,241,0.04);border-radius:10px">
+        <div style="font-size:11px;color:var(--d)">Est. Clicks</div>
+        <div style="font-size:22px;font-weight:800;color:var(--b)">${(r.est_monthly_clicks || 0).toLocaleString()}</div>
+      </div>
+      <div style="padding:12px;background:rgba(255,107,53,0.04);border-radius:10px">
+        <div style="font-size:11px;color:var(--d)">Avg EPC</div>
+        <div style="font-size:22px;font-weight:800;color:var(--o)">$${r.avg_epc || 0}</div>
+      </div>
+    </div>
+    ${r.note ? `<p class="prose" style="margin-top:12px;font-size:12px;text-align:center">${r.note}</p>` : ""}
+  `;
+}
+
+/* ═══════════════════════════════════════
+   RENDER: CONFIG CHECKLIST
+   ═══════════════════════════════════════ */
+function renderChecklist(data) {
+  const cfg = data.config || {};
+  const items = [
+    { name: "Deploy Cloud Functions", check: data.status === "running" },
+    { name: "Gemini API Key", check: cfg.GEMINI_KEY === "✓" },
+    { name: "WordPress Connected", check: cfg.WP_URL === "✓" },
+    { name: "Buffer (Social Media)", check: cfg.BUFFER_TOKEN === "✓" },
+    { name: "ConvertKit (Email)", check: cfg.CONVERTKIT_KEY === "✓" },
+    { name: "SendGrid (Notifications)", check: cfg.SENDGRID_KEY === "✓" },
+    { name: "Medium (Cross-post)", check: cfg.MEDIUM_TOKEN === "✓" },
+    { name: "Join Affiliate Programs", check: true },
+    { name: "Update Affiliate URLs in main.py", check: true },
+  ];
+  const done = items.filter(i => i.check).length;
+  document.getElementById("checklist").innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--d);margin-bottom:4px">
+        <span>${done}/${items.length} complete</span>
+        <span>${Math.round(done/items.length*100)}%</span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:${done/items.length*100}%;background:var(--g)"></div></div>
+    </div>
+    ${items.map(i => `
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0">
+        <span style="font-size:16px">${i.check ? "✅" : "⬜"}</span>
+        <span style="font-size:13px;color:${i.check ? "var(--t)" : "var(--d)"}">${i.name}</span>
+      </div>
+    `).join("")}
+  `;
+}
+
+/* ═══════════════════════════════════════
+   RUN PIPELINE
+   ═══════════════════════════════════════ */
+async function runPipeline() {
+  if (!BASE_URL) { alert("Connect first!"); return; }
+  const btn = document.getElementById("run-btn");
+  const status = document.getElementById("run-status");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Pipeline running...';
+  status.innerHTML = '<span style="color:var(--y)">⏳ Generating content with Gemini AI... This takes 2-4 minutes.</span>';
+  document.getElementById("pipeline-result").classList.add("hidden");
+
+  try {
+    const r = await fetch(BASE_URL + "/daily_pipeline", { method: "POST", timeout: 600000 });
+    const data = await r.json();
+    status.innerHTML = '<span style="color:var(--g)">✅ Pipeline complete!</span>';
+    document.getElementById("pipeline-result").classList.remove("hidden");
+    renderPipelineResult(data);
+    refreshStatus();
+  } catch (e) {
+    status.innerHTML = `<span style="color:var(--r)">❌ ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "Launch Pipeline 🚀";
+  }
+}
+
+function renderPipelineResult(data) {
+  const a = data.assets || {};
+  const items = [
+    { name: "Blog Post", icon: "📝", data: a.blog, ok: a.blog?.title },
+    { name: "WordPress", icon: "🌐", data: a.wordpress, ok: a.wordpress?.s === "ok" },
+    { name: "Medium", icon: "📰", data: a.medium, ok: a.medium?.s === "ok" },
+    { name: "Social (5 posts)", icon: "📱", data: a.social, ok: a.social?.count > 0 },
+    { name: "Email", icon: "✉️", data: a.email, ok: a.email?.s === "ok" || a.email?.sent },
+    { name: "YouTube Script", icon: "🎬", data: a.youtube, ok: a.youtube?.archived },
+    { name: "Pinterest Pins", icon: "📌", data: a.pinterest, ok: a.pinterest?.count > 0 },
+    { name: "Landing Page", icon: "🏠", data: a.landing_page, ok: a.landing_page?.archived },
+    { name: "Quality Score", icon: "⭐", data: a.quality_score, ok: (a.quality_score?.overall||0) >= 6 },
+  ];
+
+  document.getElementById("pipeline-data").innerHTML = `
+    <div style="margin-bottom:14px">
+      <span style="font-weight:700;color:var(--t)">Topic:</span>
+      <span style="color:var(--g);font-weight:600"> ${data.topic || "—"}</span>
+      <span class="tag tag-c" style="margin-left:8px">${data.topic_source || ""}</span>
+      ${data.elapsed_seconds ? `<span class="tag tag-b" style="margin-left:4px">${data.elapsed_seconds}s</span>` : ""}
+    </div>
+    ${items.map(i => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:18px">${i.icon}</span>
+        <span style="font-size:13px;flex:1">${i.name}</span>
+        <span class="dot ${i.ok ? "dot-g" : "dot-r"}"></span>
+        <span style="font-size:12px;color:${i.ok ? "var(--g)" : "var(--r)"}">${i.ok ? "Done" : "—"}</span>
+      </div>
+    `).join("")}
+  `;
+}
+
+/* ═══════════════════════════════════════
+   RUN GENERIC ENDPOINT
+   ═══════════════════════════════════════ */
+async function runEndpoint(endpoint, statusId) {
+  if (!BASE_URL) return;
+  const el = document.getElementById(statusId);
+  el.innerHTML = '<span style="color:var(--y)">Running...</span>';
+  try {
+    const r = await fetch(BASE_URL + "/" + endpoint, { method: "POST" });
+    const d = await r.json();
+    el.innerHTML = '<span style="color:var(--g)">✅ Done</span>';
+  } catch (e) {
+    el.innerHTML = `<span style="color:var(--r)">❌ ${e.message}</span>`;
+  }
+}
+
+/* ═══════════════════════════════════════
+   ANALYTICS
+   ═══════════════════════════════════════ */
+async function fetchAnalytics() {
+  if (!BASE_URL) { alert("Connect first!"); return; }
+  const btn = document.getElementById("fetch-analytics-btn");
+  const el = document.getElementById("analytics-content");
+  btn.disabled = true;
+  btn.textContent = "Analyzing...";
+  el.innerHTML = '<p class="prose" style="text-align:center;padding:20px;color:var(--y)">🧠 Running trend detection + competitor gap analysis + performance review... ~30 seconds</p>';
+
+  try {
+    const r = await fetch(BASE_URL + "/analytics");
+    const data = await r.json();
+    
+    let html = "";
+
+    // Trends
+    const trends = data.trends?.trends || [];
+    if (trends.length) {
+      html += `<div class="label" style="color:var(--g);margin-bottom:10px">🔥 Trending Topics</div>`;
+      html += trends.map(t => `
+        <div style="padding:10px 14px;background:rgba(0,229,160,0.03);border-radius:10px;margin-bottom:8px">
+          <div style="font-weight:700;font-size:14px">${t.title || t.topic}</div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+            <span class="tag tag-g">Urgency: ${t.urgency}/10</span>
+            <span class="tag tag-c">${t.seasonal_fit || ""}</span>
+          </div>
+          <div class="prose" style="margin-top:4px;font-size:12px">${t.monetization || ""}</div>
+        </div>
+      `).join("");
+    }
+
+    // Gaps
+    const gaps = data.gaps?.gaps || [];
+    if (gaps.length) {
+      html += `<div class="label" style="color:var(--o);margin:18px 0 10px">🎯 Competitor Content Gaps</div>`;
+      html += gaps.map(g => `
+        <div style="padding:10px 14px;background:rgba(255,107,53,0.03);border-radius:10px;margin-bottom:8px">
+          <div style="font-weight:700;font-size:14px">${g.topic}</div>
+          <span class="tag tag-o">${g.est_difficulty || "medium"} difficulty</span>
+          <div class="prose" style="margin-top:4px;font-size:12px">${g.why_missing || ""}</div>
+        </div>
+      `).join("");
+    }
+
+    el.innerHTML = html || '<p class="prose" style="text-align:center">No analytics data available</p>';
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--r);text-align:center">${e.message}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generate Report";
+  }
+}
+
+// Auto-refresh every 60s if connected
+setInterval(() => { if (BASE_URL) refreshStatus(); }, 60000);
+</script>
+</body>
+</html>
