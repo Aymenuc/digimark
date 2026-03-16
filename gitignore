@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+*.key
+*.json
+!requirements.txt
+.DS_Store
+node_modules/
+venv/
+.idea/
