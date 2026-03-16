@@ -1,0 +1,179 @@
+name: Deploy to Google Cloud
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Enable APIs
+        run: |
+          gcloud services enable \
+            cloudfunctions.googleapis.com \
+            cloudscheduler.googleapis.com \
+            cloudbuild.googleapis.com \
+            firestore.googleapis.com \
+            storage.googleapis.com \
+            run.googleapis.com
+
+      - name: Create infrastructure (first run only)
+        run: |
+          gcloud firestore databases create --location=${{ secrets.GCP_REGION }} 2>/dev/null || true
+          gsutil mb -l ${{ secrets.GCP_REGION }} gs://${{ secrets.GCS_BUCKET }} 2>/dev/null || true
+          gsutil mb -l ${{ secrets.GCP_REGION }} gs://${{ secrets.GCS_BUCKET }}-site 2>/dev/null || true
+
+      - name: Deploy daily_pipeline function
+        run: |
+          gcloud functions deploy daily_pipeline \
+            --gen2 \
+            --runtime python311 \
+            --trigger-http \
+            --allow-unauthenticated \
+            --region ${{ secrets.GCP_REGION }} \
+            --memory 1024MB \
+            --timeout 540s \
+            --source . \
+            --entry-point daily_pipeline \
+            --set-env-vars "\
+              GEMINI_KEY=${{ secrets.GEMINI_KEY }},\
+              GEMINI_MODEL=gemini-2.0-flash,\
+              WP_URL=${{ secrets.WP_URL }},\
+              WP_USER=${{ secrets.WP_USER }},\
+              WP_APP_PASS=${{ secrets.WP_APP_PASS }},\
+              BUFFER_TOKEN=${{ secrets.BUFFER_TOKEN }},\
+              BUFFER_PROFILES=${{ secrets.BUFFER_PROFILES }},\
+              CONVERTKIT_KEY=${{ secrets.CONVERTKIT_KEY }},\
+              CONVERTKIT_SECRET=${{ secrets.CONVERTKIT_SECRET }},\
+              MEDIUM_TOKEN=${{ secrets.MEDIUM_TOKEN }},\
+              GCS_BUCKET=${{ secrets.GCS_BUCKET }},\
+              AFF_TAG=${{ secrets.AFF_TAG }},\
+              NOTIFY_EMAIL=${{ secrets.NOTIFY_EMAIL }},\
+              SENDGRID_KEY=${{ secrets.SENDGRID_KEY }}"
+
+      - name: Deploy monthly_optimize function
+        run: |
+          gcloud functions deploy monthly_optimize \
+            --gen2 \
+            --runtime python311 \
+            --trigger-http \
+            --allow-unauthenticated \
+            --region ${{ secrets.GCP_REGION }} \
+            --memory 512MB \
+            --timeout 120s \
+            --source . \
+            --entry-point monthly_optimize \
+            --set-env-vars "\
+              GEMINI_KEY=${{ secrets.GEMINI_KEY }},\
+              GEMINI_MODEL=gemini-2.0-flash,\
+              WP_URL=${{ secrets.WP_URL }},\
+              WP_USER=${{ secrets.WP_USER }},\
+              WP_APP_PASS=${{ secrets.WP_APP_PASS }},\
+              GCS_BUCKET=${{ secrets.GCS_BUCKET }}"
+
+      - name: Deploy analytics function
+        run: |
+          gcloud functions deploy analytics \
+            --gen2 \
+            --runtime python311 \
+            --trigger-http \
+            --allow-unauthenticated \
+            --region ${{ secrets.GCP_REGION }} \
+            --memory 512MB \
+            --timeout 120s \
+            --source . \
+            --entry-point analytics \
+            --set-env-vars "\
+              GEMINI_KEY=${{ secrets.GEMINI_KEY }},\
+              GEMINI_MODEL=gemini-2.0-flash,\
+              GCS_BUCKET=${{ secrets.GCS_BUCKET }}"
+
+      - name: Deploy status function
+        run: |
+          gcloud functions deploy status \
+            --gen2 \
+            --runtime python311 \
+            --trigger-http \
+            --allow-unauthenticated \
+            --region ${{ secrets.GCP_REGION }} \
+            --memory 256MB \
+            --timeout 30s \
+            --source . \
+            --entry-point status \
+            --set-env-vars "\
+              GEMINI_KEY=${{ secrets.GEMINI_KEY }},\
+              GCS_BUCKET=${{ secrets.GCS_BUCKET }}"
+
+      - name: Set up Cloud Scheduler cron jobs
+        run: |
+          BASE="https://${{ secrets.GCP_REGION }}-${{ secrets.GCP_PROJECT_ID }}.cloudfunctions.net"
+
+          # Daily 6 AM: Full pipeline
+          gcloud scheduler jobs create http wpm-daily \
+            --location ${{ secrets.GCP_REGION }} \
+            --schedule "0 6 * * *" \
+            --uri "$BASE/daily_pipeline" \
+            --http-method POST \
+            --time-zone "America/New_York" \
+            --attempt-deadline 600s \
+            --description "Daily: blog + social + email + YT + pins + landing page" \
+            2>/dev/null || true
+
+          # Monthly 1st: SEO optimizer
+          gcloud scheduler jobs create http wpm-monthly-seo \
+            --location ${{ secrets.GCP_REGION }} \
+            --schedule "0 10 1 * *" \
+            --uri "$BASE/monthly_optimize" \
+            --http-method POST \
+            --time-zone "America/New_York" \
+            --description "Monthly: rewrite underperforming posts" \
+            2>/dev/null || true
+
+          # Monday 8 AM: Analytics
+          gcloud scheduler jobs create http wpm-weekly-analytics \
+            --location ${{ secrets.GCP_REGION }} \
+            --schedule "0 8 * * 1" \
+            --uri "$BASE/analytics" \
+            --http-method POST \
+            --time-zone "America/New_York" \
+            --description "Weekly: trends + gaps + performance" \
+            2>/dev/null || true
+
+      - name: Deploy dashboard to Cloud Storage
+        run: |
+          gsutil cp dashboard.html gs://${{ secrets.GCS_BUCKET }}-site/index.html
+          gsutil web set -m index.html gs://${{ secrets.GCS_BUCKET }}-site
+          gsutil iam ch allUsers:objectViewer gs://${{ secrets.GCS_BUCKET }}-site
+
+      - name: Print deployment summary
+        run: |
+          BASE="https://${{ secrets.GCP_REGION }}-${{ secrets.GCP_PROJECT_ID }}.cloudfunctions.net"
+          SITE="https://storage.googleapis.com/${{ secrets.GCS_BUCKET }}-site/index.html"
+          echo ""
+          echo "✅ DEPLOYMENT COMPLETE"
+          echo "━━━━━━━━━━━━━━━━━━━━━"
+          echo "Dashboard:  $SITE"
+          echo "Status API: $BASE/status"
+          echo "Pipeline:   $BASE/daily_pipeline"
+          echo "Analytics:  $BASE/analytics"
+          echo "SEO Fix:    $BASE/monthly_optimize"
+          echo ""
